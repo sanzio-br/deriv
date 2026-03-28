@@ -3,20 +3,17 @@
 
 This repository contains a collection of specialized, client-side trading bots built with HTML5, TailwindCSS, and Native WebSockets.
 
-## 📂 Project Structure
-* `html/`: Contains the standalone executable bot files.
-* `assets/`: UI components and design language specifications.
 
 ## 🤖 Available Bots
 
 | Bot Name | Strategy | Signal Logic | Status |
 | :--- | :--- | :--- | :--- |
-| **[V100 Turbo Dual-Mode](#-v100-turbo-dual-mode)** | Serial Triple-Entry | Digit Over/Under | ✅ Stable |
+| **[over1-2-3_under7-8-9.html](#-v100-turbo-dual-mode)** | Serial Triple-Entry | Digit Over/Under | ✅ Stable |
 | **V200 Pulse** | Reversion | Mean Reversion | 🛠️ In Dev |
 
 ---
 
-## 🚀 V100 Turbo Dual-Mode
+## 🚀 V100 Turbo Dual-Mode -over1-2-3_under7-8-9.html
 **The flagship high-speed serial executor.**
 
 V100 Turbo utilizes a dual-zone trigger system to maximize win probability across the full digit spectrum (0-9).

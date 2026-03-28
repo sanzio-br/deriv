@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>V100 Bot Ecosystem • Terminal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: #0b0b0d; color: #e5e7eb; font-family: 'Segoe UI', system-ui, sans-serif; }
+    .glass-card { background: #141417; border: 1px solid #27272a; transition: all 0.3s ease; }
+    .glass-card:hover { border-color: #10b981; transform: translateY(-4px); box-shadow: 0 10px 30px -10px rgba(16, 185, 129, 0.2); }
+    .badge-active { background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+  </style>
+</head>
+<body class="p-6 md:p-12">
+
+  <div class="max-w-6xl mx-auto">
+    <header class="mb-12 border-b border-zinc-800 pb-8">
+      <h1 class="text-4xl font-black text-white tracking-tighter italic uppercase">
+        V100 <span class="text-emerald-500">Bot Ecosystem</span>
+      </h1>
+      <p class="text-gray-500 mt-2 font-medium">Professional Derivative Trading Automation Terminal</p>
+    </header>
+
+    <div id="botContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      </div>
+
+    <section class="mt-16 bg-zinc-900/50 border border-zinc-800 p-8 rounded-xl">
+      <h2 class="text-xl font-bold text-white mb-4 flex items-center">
+        <span class="w-2 h-2 bg-emerald-500 rounded-full mr-3"></span>
+        How to Use These Bots
+      </h2>
+      <div class="grid md:grid-cols-3 gap-8 text-sm text-gray-400">
+        <div>
+          <h3 class="text-emerald-400 font-bold mb-2 uppercase tracking-widest text-[10px]">Step 1: Token</h3>
+          <p>Obtain an API Token from your Deriv account (Settings > API Token). Ensure it has "Trade" and "Read" scopes.</p>
+        </div>
+        <div>
+          <h3 class="text-emerald-400 font-bold mb-2 uppercase tracking-widest text-[10px]">Step 2: Configuration</h3>
+          <p>Set your Base Stake and Martingale multiplier. For Digit Under/Over, a 11.0 multiplier is recommended for full recovery.</p>
+        </div>
+        <div>
+          <h3 class="text-emerald-400 font-bold mb-2 uppercase tracking-widest text-[10px]">Step 3: Execution</h3>
+          <p>Click "Start Turbo". The bot will monitor ticks and execute only when high-probability serial patterns emerge.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="mt-12 text-center text-gray-600 text-[10px] uppercase tracking-[0.2em]">
+      V100 Turbo Serial Protection Active • 2026 Systems Inc.
+    </footer>
+  </div>
+
+  <script>
+    // Hardcoded bot data to bypass CORS local file restrictions
+const bots = [
+  {
+    "name": "V100 TURBO: DUAL MODE (1-2-3 & 7-8-9)",
+    "filename": "v100_1s_turbo_dual.html",
+    "description": "High-speed Serial Triple-Entry bot. Executes DIGITUNDER (7,8,9) and DIGITOVER (0,1,2) based on real-time tick analysis.",
+    "strategy": "Dual-zone barrier entry with automatic Martingale recovery.",
+    "risk_level": "High (Requires 11.0x Martingale)",
+    "status": "Active",
+    "link": "v100_1s_turbo_dual.html"
+  },
+{
+    "name": "V100 TURBO: DUAL MODE (1 & 9)",
+    "filename": "v100_1s_turbo_dual_low_risk.html",
+    "description": "High-speed Serial Triple-Entry bot. Executes DIGITUNDER (9) and DIGITOVER (1) based on real-time tick analysis.",
+    "strategy": "Dual-zone barrier entry with automatic Martingale recovery.",
+    "risk_level": "High (Requires 1.0x Martingale)",
+    "status": "Active",
+    "link": "v100_1s_turbo_dual_low_risk.html"
+  }
+];
+
+function loadBots() {
+  const container = document.getElementById('botContainer');
+  
+  if (!container) return;
+
+  container.innerHTML = bots.map(bot => `
+    <div class="glass-card p-6 rounded-lg flex flex-col h-full">
+      <div class="flex justify-between items-start mb-4">
+        <span class="text-[10px] font-bold px-2 py-0.5 rounded badge-active uppercase tracking-widest">${bot.status}</span>
+        <span class="text-[10px] text-gray-600 font-mono">${bot.filename}</span>
+      </div>
+      
+      <h3 class="text-xl font-black text-white mb-2 tracking-tight">${bot.name}</h3>
+      <p class="text-gray-400 text-sm mb-4 flex-grow">${bot.description}</p>
+      
+      <div class="space-y-2 mb-6 border-t border-zinc-800 pt-4">
+        <div class="flex justify-between text-[11px]">
+          <span class="text-gray-500 uppercase font-bold">Strategy:</span>
+          <span class="text-gray-300 text-right">${bot.strategy}</span>
+        </div>
+        <div class="flex justify-between text-[11px]">
+          <span class="text-gray-500 uppercase font-bold">Risk:</span>
+          <span class="${bot.risk_level.includes('High') ? 'text-red-400' : 'text-emerald-400'} font-bold uppercase">${bot.risk_level}</span>
+        </div>
+      </div>
+
+      <a href="${bot.link}" class="block w-full bg-emerald-600 hover:bg-emerald-500 text-white text-center py-3 font-black uppercase tracking-tighter transition rounded">
+        Launch Bot
+      </a>
+    </div>
+  `).join('');
+}
+
+window.onload = loadBots;
+  </script>
+</body>
+</html>
