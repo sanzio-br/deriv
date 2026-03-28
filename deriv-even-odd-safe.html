@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deriv Even/Odd Bot • Imbalance Graph</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    #log { height: 55vh; overflow-y: auto; }
+    #imbalanceChartContainer { height: 180px; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen">
+
+<div class="flex h-screen">
+
+  <!-- Sidebar -->
+  <div class="w-96 bg-zinc-900 border-r border-zinc-800 p-6 flex flex-col overflow-y-auto">
+    <h1 class="text-2xl font-bold mb-6 text-emerald-400">EVEN/ODD BOT • IMBALANCE</h1>
+
+    <div class="space-y-5">
+      <div>
+        <label class="block text-sm text-zinc-400 mb-1">API Token</label>
+        <input id="token" type="password" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3">
+      </div>
+
+      <div>
+        <label class="block text-sm text-zinc-400 mb-1">Stake Mode</label>
+        <select id="riskMode" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3">
+          <option value="fixed" selected>Fixed Stake</option>
+          <option value="percent">Percentage</option>
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div id="fixedGroup">
+          <label class="block text-sm text-zinc-400 mb-1">Fixed Stake USD</label>
+          <input id="fixedStake" value="5.00" type="number" step="0.01" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3">
+        </div>
+        <div id="percentGroup" class="hidden">
+          <label class="block text-sm text-zinc-400 mb-1">Risk %</label>
+          <input id="riskPercent" value="0.50" type="number" step="0.05" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm text-zinc-400 mb-1">Max Concurrent</label>
+          <input id="maxConcurrent" value="2" type="number" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3">
+        </div>
+        <div>
+          <label class="block text-sm text-zinc-400 mb-1">Imbalance Threshold %</label>
+          <input id="confidence" value="15" type="number" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3">
+        </div>
+      </div>
+
+      <div class="space-y-3 border-t border-zinc-700 pt-4">
+        <div class="flex items-center gap-3">
+          <input type="checkbox" id="enableRecovery" checked class="w-5 h-5">
+          <label for="enableRecovery" class="text-sm">Enable Recovery</label>
+        </div>
+        <div>
+          <label class="block text-sm text-zinc-400 mb-1">Recover % of loss</label>
+          <input id="recoveryPercent" value="25" type="number" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3">
+        </div>
+        <div>
+          <label class="block text-sm text-zinc-400 mb-1">Reset after X wins</label>
+          <input id="resetAfterWins" value="3" type="number" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3">
+        </div>
+      </div>
+
+      <div class="flex gap-3">
+        <button onclick="connect()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 py-3 rounded-xl font-medium">Connect</button>
+        <button onclick="toggleTrading()" id="startBtn" disabled class="flex-1 bg-zinc-700 hover:bg-zinc-600 py-3 rounded-xl font-medium">Start</button>
+      </div>
+
+      <button onclick="resetBot()" class="w-full bg-red-600/80 hover:bg-red-600 py-2 rounded-xl text-sm">Reset All</button>
+    </div>
+
+    <div class="mt-8 pt-6 border-t border-zinc-700">
+      <h3 class="text-lg font-semibold mb-3">Live Status</h3>
+      <div id="multiTable" class="text-xs font-mono overflow-auto max-h-64"></div>
+    </div>
+
+    <div class="mt-auto pt-8 text-xs space-y-1 text-zinc-500">
+      <div>Status: <span id="status" class="text-amber-400">Disconnected</span></div>
+      <div>Balance: <span id="balance" class="text-emerald-400">—</span></div>
+      <div>Recovery Debt: <span id="recoveryDebt" class="text-yellow-400">0.00</span></div>
+      <div>Open Trades: <span id="openTrades">0</span>/2</div>
+      <div>Total P&L: <span id="totalPnl" class="font-medium">0.00</span></div>
+    </div>
+  </div>
+
+  <!-- Main Area -->
+  <div class="flex-1 flex flex-col">
+
+    <!-- Live Log -->
+    <div class="p-8 pb-4 flex-1 flex flex-col">
+      <div class="flex justify-between mb-4">
+        <h2 class="text-xl font-semibold">Live Log</h2>
+        <button onclick="clearLog()" class="px-4 py-1 bg-zinc-700 hover:bg-zinc-600 rounded text-sm">Clear Log</button>
+      </div>
+      <div id="log" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 flex-1 overflow-auto font-mono text-sm"></div>
+    </div>
+
+    <!-- NEW: Imbalance Graph -->
+    <div class="px-8 pb-4">
+      <h2 class="text-lg font-semibold mb-3">Current Imbalance % Across All Volatilities</h2>
+      <div class="bg-zinc-900 rounded-3xl p-6">
+        <canvas id="imbalanceChart" height="180"></canvas>
+      </div>
+    </div>
+
+    <!-- P&L Curve -->
+    <div class="px-8 pb-8">
+      <div class="bg-zinc-900 rounded-3xl p-6">
+        <h2 class="text-lg font-semibold mb-4">Equity Curve</h2>
+        <canvas id="pnlChart" height="110"></canvas>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const symbols = ["R_10", "R_25", "R_50", "R_75", "R_100"];
+let ws = null, isTrading = false, token = "";
+let balance = 0, totalPnL = 0, openContracts = 0, recoveryDebt = 0;
+let winStreak = 0, tradeCount = 0;
+
+let riskMode = "fixed", fixedStake = 5, riskPercent = 0.5;
+let maxConcurrent = 2, confidenceThreshold = 15;
+let enableRecovery = true, recoveryPercent = 25, resetAfterWins = 3;
+
+let symbolData = {};
+symbols.forEach(s => symbolData[s] = {lastDigits: [], evenCount: 0, oddCount: 0});
+
+let pnlHistory = [], chart, imbalanceChart, balanceInterval = null;
+
+function log(msg, color = "text-zinc-400") {
+  const t = new Date().toLocaleTimeString();
+  document.getElementById('log').innerHTML += `<div class="${color}"><span class="text-zinc-500">[${t}]</span> ${msg}</div>`;
+  document.getElementById('log').scrollTop = 999999;
+}
+
+function clearLog() { document.getElementById('log').innerHTML = ""; }
+
+function round2(n) { return Math.round(n * 100) / 100; }
+
+function getCurrentStake() {
+  let base = riskMode === "fixed" ? fixedStake : round2(balance * riskPercent / 100);
+  if (!enableRecovery || recoveryDebt <= 0) return Math.max(0.35, base);
+  const expectedReturn = 0.96;
+  const recoveryAdd = (recoveryDebt * recoveryPercent / 100) / expectedReturn;
+  let stake = base + recoveryAdd;
+  return Math.max(0.35, Math.min(stake, balance * 0.10));
+}
+
+function updateMultiTable() {
+  let html = `<table class="w-full text-xs"><tr class="border-b"><th>Symbol</th><th>Even</th><th>Odd</th><th>Imbalance</th></tr>`;
+  symbols.forEach(s => {
+    const d = symbolData[s];
+    const total = d.evenCount + d.oddCount;
+    const imbalance = total ? Math.abs(d.evenCount - d.oddCount) / total * 100 : 0;
+    html += `<tr><td>${s}</td><td>${d.evenCount}</td><td>${d.oddCount}</td><td class="${imbalance >= confidenceThreshold ? 'text-emerald-400' : ''}">${imbalance.toFixed(1)}%</td></tr>`;
+  });
+  html += `</table>`;
+  document.getElementById('multiTable').innerHTML = html;
+}
+
+// NEW: Real-time Imbalance Bar Chart
+function updateImbalanceChart() {
+  const labels = symbols;
+  const data = symbols.map(s => {
+    const d = symbolData[s];
+    const total = d.evenCount + d.oddCount;
+    return total ? Math.abs(d.evenCount - d.oddCount) / total * 100 : 0;
+  });
+
+  if (!imbalanceChart) {
+    const ctx = document.getElementById('imbalanceChart').getContext('2d');
+    imbalanceChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Imbalance %',
+          data: data,
+          backgroundColor: data.map(v => v >= confidenceThreshold ? '#10b981' : '#64748b'),
+          borderColor: '#1f2937',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { min: 0, max: 60, grid: { color: '#27272a' } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+  } else {
+    imbalanceChart.data.datasets[0].data = data;
+    imbalanceChart.data.datasets[0].backgroundColor = data.map(v => v >= confidenceThreshold ? '#10b981' : '#64748b');
+    imbalanceChart.update('none');
+  }
+}
+
+function shouldTradeForSymbol(sym) {
+  const d = symbolData[sym];
+  const total = d.evenCount + d.oddCount;
+  if (total < 300) return false;
+  const imbalance = Math.abs(d.evenCount - d.oddCount) / total * 100;
+  return imbalance >= confidenceThreshold;
+}
+
+function placeTrade(sym) {
+  if (openContracts >= maxConcurrent) return;
+  const d = symbolData[sym];
+  const contractType = d.evenCount > d.oddCount ? "DIGITEVEN" : "DIGITODD";
+  const stake = getCurrentStake();
+
+  log(`📊 ${sym} | ${contractType} $${stake.toFixed(2)} (debt ${recoveryDebt.toFixed(2)})`, "text-emerald-400");
+
+  ws.send(JSON.stringify({
+    proposal: 1,
+    amount: stake,
+    basis: "stake",
+    contract_type: contractType,
+    currency: "USD",
+    duration: 1,
+    duration_unit: "t",
+    symbol: sym
+  }));
+}
+
+// WebSocket handlers (same as previous safe version)
+function connect() {
+  token = document.getElementById('token').value.trim();
+  if (!token) return alert("Enter API Token");
+
+  riskMode = document.getElementById('riskMode').value;
+  fixedStake = parseFloat(document.getElementById('fixedStake').value) || 5;
+  riskPercent = parseFloat(document.getElementById('riskPercent').value) || 0.5;
+  maxConcurrent = parseInt(document.getElementById('maxConcurrent').value) || 2;
+  confidenceThreshold = parseFloat(document.getElementById('confidence').value) || 15;
+  enableRecovery = document.getElementById('enableRecovery').checked;
+  recoveryPercent = parseFloat(document.getElementById('recoveryPercent').value) || 25;
+  resetAfterWins = parseInt(document.getElementById('resetAfterWins').value) || 3;
+
+  if (ws) ws.close();
+  ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=1089`);
+
+  ws.onopen = () => {
+    log("✅ Connected", "text-emerald-400");
+    ws.send(JSON.stringify({ authorize: token }));
+  };
+
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+
+    if (m.msg_type === "authorize") {
+      balance = m.authorize.balance;
+      document.getElementById('balance').textContent = balance.toFixed(2);
+      document.getElementById('status').textContent = "Connected";
+      document.getElementById('status').className = "text-emerald-400";
+      document.getElementById('startBtn').disabled = false;
+    }
+
+    if (m.msg_type === "balance") {
+      balance = m.balance.balance;
+      document.getElementById('balance').textContent = balance.toFixed(2);
+    }
+
+    if (m.msg_type === "tick") {
+      const sym = m.tick.symbol;
+      if (!symbolData[sym]) return;
+      const digit = Math.floor(m.tick.quote) % 10;
+      const isEven = digit % 2 === 0;
+      const d = symbolData[sym];
+      d.lastDigits.push(digit);
+      if (d.lastDigits.length > 1000) d.lastDigits.shift();
+      if (isEven) d.evenCount++; else d.oddCount++;
+
+      updateMultiTable();
+      updateImbalanceChart();
+
+      if (isTrading && openContracts < maxConcurrent && shouldTradeForSymbol(sym)) {
+        placeTrade(sym);
+      }
+    }
+
+    // Proposal, Buy, and Contract result handlers (identical to previous safe version)
+    if (m.msg_type === "proposal" && !m.error) ws.send(JSON.stringify({ buy: m.proposal.id, price: m.proposal.ask_price }));
+
+    if (m.msg_type === "buy") {
+      if (m.error) return log("Buy error: " + m.error.message, "text-red-400");
+      openContracts++;
+      document.getElementById('openTrades').textContent = openContracts;
+      ws.send(JSON.stringify({ proposal_open_contract: 1, contract_id: m.buy.contract_id, subscribe: 1 }));
+    }
+
+    if (m.msg_type === "proposal_open_contract" && m.proposal_open_contract.is_sold) {
+      const profit = parseFloat(m.proposal_open_contract.profit || 0);
+      totalPnL += profit;
+      openContracts = Math.max(0, openContracts - 1);
+      document.getElementById('openTrades').textContent = openContracts;
+      document.getElementById('totalPnl').textContent = totalPnL.toFixed(2);
+      document.getElementById('recoveryDebt').textContent = recoveryDebt.toFixed(2);
+
+      tradeCount++;
+
+      if (profit > 0) {
+        log(`🎉 WIN +$${profit.toFixed(2)}`, "text-emerald-400");
+        winStreak++;
+        recoveryDebt = Math.max(0, recoveryDebt - profit);
+        if (winStreak >= resetAfterWins) {
+          recoveryDebt = 0;
+          winStreak = 0;
+          log(`✅ Recovery cleared after ${resetAfterWins} wins`, "text-emerald-400");
+        }
+      } else {
+        log(`💥 LOSS -$${Math.abs(profit).toFixed(2)}`, "text-red-400");
+        recoveryDebt += Math.abs(profit);
+        winStreak = 0;
+      }
+
+      if (tradeCount % 10 === 0) {
+        log(`📊 10-trade summary → P&L: $${totalPnL.toFixed(2)} | Debt: $${recoveryDebt.toFixed(2)}`, "text-yellow-400");
+      }
+
+      pnlHistory.push(totalPnL);
+      if (pnlHistory.length > 120) pnlHistory.shift();
+      chart.update();
+    }
+  };
+}
+
+function toggleTrading() {
+  isTrading = !isTrading;
+  const btn = document.getElementById('startBtn');
+  btn.textContent = isTrading ? "Stop" : "Start";
+  btn.classList.toggle('bg-red-600', isTrading);
+
+  if (isTrading) {
+    log(`🚀 Even/Odd bot started | Threshold ${confidenceThreshold}%`, "text-emerald-400");
+    symbols.forEach(s => ws.send(JSON.stringify({ ticks: s })));
+  } else {
+    if (ws) ws.send(JSON.stringify({ forget_all: "ticks" }));
+  }
+}
+
+function resetBot() {
+  if (!confirm("Reset everything?")) return;
+  toggleTrading();
+  totalPnL = openContracts = recoveryDebt = winStreak = tradeCount = 0;
+  symbols.forEach(s => {
+    symbolData[s].lastDigits = [];
+    symbolData[s].evenCount = 0;
+    symbolData[s].oddCount = 0;
+  });
+  pnlHistory = [];
+  document.getElementById('totalPnl').textContent = "0.00";
+  document.getElementById('recoveryDebt').textContent = "0.00";
+  updateMultiTable();
+  updateImbalanceChart();
+  log("🔄 Full reset", "text-zinc-400");
+}
+
+window.onload = () => {
+  // P&L Chart
+  chart = new Chart(document.getElementById('pnlChart'), {
+    type: 'line',
+    data: { labels: Array(120).fill(''), datasets: [{ data: pnlHistory, borderColor: '#10b981', tension: 0.4 }] },
+    options: { plugins: { legend: { display: false } } }
+  });
+
+  // Imbalance Chart (new)
+  const imbCtx = document.getElementById('imbalanceChart').getContext('2d');
+  imbalanceChart = new Chart(imbCtx, {
+    type: 'bar',
+    data: { labels: symbols, datasets: [{ label: 'Imbalance %', data: Array(5).fill(0), backgroundColor: '#10b981' }] },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 55 } } }
+  });
+
+  document.getElementById('riskMode').addEventListener('change', function() {
+    const isFixed = this.value === "fixed";
+    document.getElementById('fixedGroup').classList.toggle('hidden', !isFixed);
+    document.getElementById('percentGroup').classList.toggle('hidden', isFixed);
+  });
+
+  updateMultiTable();
+  updateImbalanceChart();
+  log("👋 Even/Odd bot ready with live imbalance graph", "text-zinc-400");
+};
+</script>
+</body>
+</html>

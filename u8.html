@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Simple Under 8 • Turbo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #050505; color: #eee; font-family: monospace; }
+        .stat-box { background: #111; border: 1px solid #222; padding: 15px; border-radius: 4px; }
+        #log { height: 350px; overflow-y: auto; background: #000; border: 1px solid #333; padding: 10px; font-size: 12px; color: #888; }
+        input { background: #1a1a1a; border: 1px solid #333; color: white; padding: 8px; width: 100%; border-radius: 4px; }
+        button { transition: 0.2s; font-weight: bold; text-transform: uppercase; border-radius: 4px; }
+    </style>
+</head>
+<body class="p-6">
+
+<div class="max-w-4xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-xl font-bold text-emerald-500">UNDER 8 <span class="text-white">TURBO EXECUTION</span></h1>
+        <div id="status" class="text-xs text-zinc-500 uppercase tracking-widest">Disconnected</div>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="stat-box text-center">
+            <div class="text-[10px] text-zinc-500 mb-1 uppercase">Profit</div>
+            <div id="profit" class="text-xl font-bold text-white">$0.00</div>
+        </div>
+        <div class="stat-box text-center">
+            <div class="text-[10px] text-zinc-500 mb-1 uppercase">Next Stake</div>
+            <div id="nextStake" class="text-xl font-bold text-amber-500">$0.35</div>
+        </div>
+        <div class="stat-box text-center">
+            <div class="text-[10px] text-zinc-500 mb-1 uppercase">Active</div>
+            <div id="active" class="text-xl font-bold text-emerald-500">0</div>
+        </div>
+        <div class="stat-box text-center border-emerald-900/50">
+            <div class="text-[10px] text-emerald-500 mb-1 uppercase">Last Digit</div>
+            <div id="digit" class="text-2xl font-black text-white">-</div>
+        </div>
+    </div>
+
+    <div class="stat-box mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+            <div>
+                <label class="text-[10px] uppercase text-zinc-500">API Token</label>
+                <input id="token" type="password" placeholder="Deriv Token">
+            </div>
+            <div>
+                <label class="text-[10px] uppercase text-zinc-500">Base Stake</label>
+                <input id="stake" type="number" value="0.35" step="0.01">
+            </div>
+            <div>
+                <label class="text-[10px] uppercase text-zinc-500">Martingale (x)</label>
+                <input id="martingale" type="number" value="11" step="0.1">
+            </div>
+            <div>
+                <label class="text-[10px] uppercase text-zinc-500">Max Open</label>
+                <input id="maxConcurrent" type="number" value="2">
+            </div>
+        </div>
+        <div class="flex gap-4">
+            <button onclick="connect()" class="flex-1 bg-white text-black py-3 hover:bg-zinc-200">Connect Server</button>
+            <button id="startBtn" onclick="toggle()" disabled class="flex-1 bg-zinc-800 text-zinc-500 py-3">Start Bot</button>
+        </div>
+    </div>
+
+    <div id="log" class="rounded">
+        [System] Ready for connection.
+    </div>
+</div>
+
+<script>
+    let ws, running = false, active = 0;
+    let baseStake = 0.35, currentStake = 0.35, totalProfit = 0;
+
+    function log(msg, color = 'text-zinc-500') {
+        const time = new Date().toLocaleTimeString([], {hour12:false, second:'2-digit'});
+        const logEl = document.getElementById('log');
+        logEl.innerHTML += `<div class="py-0.5 ${color}"><span class="opacity-30 mr-2">[${time}]</span>${msg}</div>`;
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function connect() {
+        const token = document.getElementById('token').value.trim();
+        if(!token) return alert("Token Required");
+
+        ws = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=1089');
+        ws.onopen = () => ws.send(JSON.stringify({ authorize: token }));
+
+        ws.onmessage = (e) => {
+            const res = JSON.parse(e.data);
+            
+            if (res.msg_type === 'authorize' && !res.error) {
+                log("Server Authorized", "text-emerald-400");
+                document.getElementById('status').innerText = "Connected";
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('startBtn').className = "flex-1 bg-emerald-600 text-white py-3";
+                ws.send(JSON.stringify({ ticks: 'R_100', subscribe: 1 }));
+                ws.send(JSON.stringify({ proposal_open_contract: 1, subscribe: 1 }));
+            }
+
+            if (res.msg_type === 'tick') {
+                const quote = res.tick.quote;
+                const digit = Math.floor(quote * 100) % 10;
+                document.getElementById('digit').innerText = digit;
+                document.getElementById('digit').className = (digit >= 8) ? "text-2xl font-black text-emerald-400" : "text-2xl font-black text-white";
+
+                const max = parseInt(document.getElementById('maxConcurrent').value);
+                if (running && (digit === 8 || digit === 9) && active < max) {
+                    executeTrade();
+                }
+            }
+
+            if (res.msg_type === 'proposal' && !res.error) {
+                ws.send(JSON.stringify({ buy: res.proposal.id, price: res.proposal.ask_price }));
+            }
+
+            if (res.msg_type === 'buy' && !res.error) {
+                active++;
+                document.getElementById('active').innerText = active;
+                log(`Trade Fired: $${currentStake.toFixed(2)}`, "text-zinc-300");
+            }
+
+            if (res.msg_type === 'proposal_open_contract' && res.proposal_open_contract.is_sold) {
+                const p = parseFloat(res.proposal_open_contract.profit);
+                totalProfit += p;
+                active = Math.max(0, active - 1);
+                document.getElementById('active').innerText = active;
+
+                if (p > 0) {
+                    log(`WIN +$${p.toFixed(2)}`, "text-emerald-400 font-bold");
+                    currentStake = baseStake;
+                } else {
+                    log(`LOSS -$${Math.abs(p).toFixed(2)}`, "text-red-500 font-bold");
+                    currentStake *= parseFloat(document.getElementById('martingale').value);
+                }
+                updateUI();
+            }
+        };
+    }
+
+    function executeTrade() {
+        ws.send(JSON.stringify({
+            proposal: 1, amount: currentStake, basis: 'stake', 
+            contract_type: 'DIGITUNDER', barrier: '8', 
+            currency: 'USD', duration: 1, duration_unit: 't', symbol: 'R_100'
+        }));
+    }
+
+    function updateUI() {
+        const profitEl = document.getElementById('profit');
+        profitEl.innerText = `$${totalProfit.toFixed(2)}`;
+        profitEl.className = `text-xl font-bold ${totalProfit >= 0 ? 'text-white' : 'text-red-500'}`;
+        document.getElementById('nextStake').innerText = `$${currentStake.toFixed(2)}`;
+    }
+
+    function toggle() {
+        running = !running;
+        baseStake = parseFloat(document.getElementById('stake').value);
+        const btn = document.getElementById('startBtn');
+        btn.innerText = running ? "Stop Bot" : "Start Bot";
+        btn.className = running ? "flex-1 bg-red-600 text-white py-3" : "flex-1 bg-emerald-600 text-white py-3";
+        log(running ? "Bot Started" : "Bot Stopped", running ? "text-emerald-400" : "text-red-400");
+    }
+</script>
+
+</body>
+</html>

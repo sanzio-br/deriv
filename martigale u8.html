@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>V100 Turbo • Fixed Martingale</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: #09090b; color: #f4f4f5; }
+    #log { height: 300px; overflow-y: auto; background: #000; border: 1px solid #1e1e21; padding: 12px; font-family: 'monospace'; font-size: 11px; border-radius: 8px; }
+    .stat-card { background: #111113; border: 1px solid #1e1e21; padding: 1rem; border-radius: 8px; }
+    .digit-bar { transition: height 0.3s; width: 100%; background: #27272a; border-radius: 2px; }
+    .active-target { background: #10b981; }
+  </style>
+</head>
+<body class="p-6">
+
+  <div class="max-w-6xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-black italic text-emerald-500">V100 <span class="text-white">TURBO FIXED</span></h1>
+        <div id="status" class="text-[10px] font-bold px-3 py-1 bg-zinc-900 border border-zinc-800 rounded text-zinc-500 uppercase">Offline</div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+      <div class="lg:col-span-3 stat-card">
+        <div class="flex items-end justify-between h-24 gap-1" id="statsBars"></div>
+        <div class="flex justify-between mt-2 text-[10px] text-zinc-600 font-bold">
+            <span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span>
+        </div>
+      </div>
+      <div class="stat-card flex flex-col items-center justify-center">
+        <div class="text-[10px] text-zinc-500 uppercase font-bold mb-1">Live</div>
+        <div id="bigDigit" class="text-6xl font-black">-</div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="stat-card">
+        <div class="text-[10px] text-zinc-500 uppercase">Profit</div>
+        <div id="profitDisplay" class="text-2xl font-bold">$0.00</div>
+      </div>
+      <div class="stat-card">
+        <div class="text-[10px] text-zinc-500 uppercase">Next Stake</div>
+        <div id="nextStakeDisplay" class="text-2xl font-bold text-amber-400">$0.35</div>
+      </div>
+      <div class="stat-card">
+        <div class="text-[10px] text-zinc-500 uppercase">Open Trades</div>
+        <div id="activeTrades" class="text-2xl font-bold text-emerald-400">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="text-[10px] text-zinc-500 uppercase">Balance</div>
+        <div id="balanceDisplay" class="text-2xl font-bold text-zinc-400">$0.00</div>
+      </div>
+    </div>
+
+    <div class="bg-zinc-900/50 p-6 rounded-xl border border-zinc-800 mb-6">
+      <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+        <input id="token" type="password" placeholder="API Token" class="md:col-span-2 bg-black border border-zinc-800 p-2 text-sm text-white">
+        <input id="stake" type="number" value="0.35" step="0.01" class="bg-black border border-zinc-800 p-2 text-sm text-white">
+        <input id="martingale" type="number" value="11.0" step="0.5" class="bg-black border border-zinc-800 p-2 text-sm text-white">
+        <input id="maxConcurrent" type="number" value="2" class="bg-black border border-zinc-800 p-2 text-sm text-white">
+        <input id="tp" type="number" value="10" class="bg-black border border-zinc-800 p-2 text-sm text-white">
+      </div>
+      <div class="flex gap-4">
+        <button onclick="connectAndAuthorize()" class="flex-1 bg-white text-black py-3 font-bold uppercase text-xs">Connect</button>
+        <button id="startBtn" onclick="toggleBot()" disabled class="flex-1 bg-zinc-800 text-zinc-500 py-3 font-bold uppercase text-xs">Start Bot</button>
+      </div>
+    </div>
+
+    <div id="log"></div>
+  </div>
+
+<script>
+let ws = null, isRunning = false;
+let baseStake = 0.35, currentStake = 0.35, sessionProfit = 0;
+let activeCount = 0, digitHistory = Array(100).fill(0);
+
+function log(msg, color = 'text-zinc-500') {
+  const time = new Date().toLocaleTimeString([], {hour12:false, second:'2-digit'});
+  document.getElementById('log').innerHTML += `<div class="py-1 border-b border-zinc-900 ${color}"><span class="opacity-20 mr-2">${time}</span> ${msg}</div>`;
+  document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+}
+
+function updateStats(lastDigit) {
+  digitHistory.push(lastDigit);
+  digitHistory.shift();
+  const counts = Array(10).fill(0);
+  digitHistory.forEach(d => counts[d]++);
+  const max = Math.max(...counts);
+  document.getElementById('statsBars').innerHTML = counts.map((c, i) => 
+    `<div class="flex flex-col items-center flex-1 h-full justify-end">
+      <div class="digit-bar ${i >= 8 ? 'active-target' : ''}" style="height: ${(c/max)*100}%"></div>
+    </div>`
+  ).join('');
+}
+
+function connectAndAuthorize() {
+  const token = document.getElementById('token').value.trim();
+  if (!token) return alert('Token required');
+  
+  ws = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=1089');
+  ws.onopen = () => ws.send(JSON.stringify({ authorize: token }));
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+
+    if (msg.msg_type === 'authorize' && !msg.error) {
+      log('AUTHORIZED', 'text-emerald-400 font-bold');
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('startBtn').className = "flex-1 bg-emerald-600 text-white py-3 font-bold uppercase text-xs";
+      ws.send(JSON.stringify({ balance: 1, subscribe: 1 }));
+      ws.send(JSON.stringify({ ticks: 'R_100', subscribe: 1 }));
+      ws.send(JSON.stringify({ proposal_open_contract: 1, subscribe: 1 }));
+    }
+
+    if (msg.msg_type === 'balance') document.getElementById('balanceDisplay').textContent = `$${msg.balance.balance.toFixed(2)}`;
+
+    if (msg.msg_type === 'tick') {
+      const digit = Math.floor(msg.tick.quote * 100) % 10;
+      document.getElementById('bigDigit').textContent = digit;
+      document.getElementById('bigDigit').className = `text-6xl font-black ${digit >= 8 ? 'text-emerald-500' : 'text-white'}`;
+      updateStats(digit);
+      
+      const maxC = parseInt(document.getElementById('maxConcurrent').value);
+      if (isRunning && (digit === 8 || digit === 9) && activeCount < maxC) {
+        // ALWAYS use the live currentStake value
+        sendProposal(currentStake);
+      }
+    }
+
+    if (msg.msg_type === 'proposal' && !msg.error) {
+      ws.send(JSON.stringify({ buy: msg.proposal.id, price: msg.proposal.ask_price }));
+    }
+
+    if (msg.msg_type === 'buy' && !msg.error) {
+      activeCount++;
+      document.getElementById('activeTrades').textContent = activeCount;
+    }
+
+    if (msg.msg_type === 'proposal_open_contract' && msg.proposal_open_contract.is_sold) {
+      const p = parseFloat(msg.proposal_open_contract.profit);
+      sessionProfit += p;
+      activeCount = Math.max(0, activeCount - 1);
+      document.getElementById('activeTrades').textContent = activeCount;
+
+      if (p > 0) {
+        log(`WIN: +$${p.toFixed(2)}`, 'text-emerald-400');
+        currentStake = baseStake; // RESET
+      } else {
+        log(`LOSS: -$${Math.abs(p).toFixed(2)}`, 'text-red-500');
+        // MULTIPLY
+        const mult = parseFloat(document.getElementById('martingale').value);
+        currentStake = currentStake * mult;
+      }
+      
+      updateUI();
+    }
+  };
+}
+
+function sendProposal(amount) {
+  ws.send(JSON.stringify({
+    proposal: 1, amount: amount, basis: 'stake', 
+    contract_type: 'DIGITUNDER', barrier: '8', 
+    currency: 'USD', duration: 1, duration_unit: 't', symbol: 'R_100'
+  }));
+}
+
+function updateUI() {
+    document.getElementById('profitDisplay').textContent = `$${sessionProfit.toFixed(2)}`;
+    document.getElementById('profitDisplay').className = `text-2xl font-bold ${sessionProfit >= 0 ? 'text-emerald-400' : 'text-red-500'}`;
+    document.getElementById('nextStakeDisplay').textContent = `$${currentStake.toFixed(2)}`;
+    
+    if (sessionProfit >= parseFloat(document.getElementById('tp').value)) {
+        log('TAKE PROFIT REACHED', 'text-white bg-emerald-600 px-2');
+        toggleBot();
+    }
+}
+
+function toggleBot() {
+  isRunning = !isRunning;
+  baseStake = parseFloat(document.getElementById('stake').value);
+  if (isRunning) {
+      log('TURBO STARTED', 'text-emerald-400');
+      document.getElementById('startBtn').textContent = "Stop Bot";
+      document.getElementById('startBtn').classList.replace('bg-emerald-600', 'bg-red-600');
+  } else {
+      log('TURBO STOPPED', 'text-amber-500');
+      document.getElementById('startBtn').textContent = "Start Bot";
+      document.getElementById('startBtn').classList.replace('bg-red-600', 'bg-emerald-600');
+  }
+}
+</script>
+</body>
+</html>

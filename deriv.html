@@ -3,26 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Deriv Differs Bot • Efficient Mode (Vol 100 1s)</title>
+  <title>Deriv Differs Bot • Efficient + Upgrades</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>body { font-family: 'Inter', system-ui, sans-serif; } .digit-bar { transition: height 0.3s ease; }</style>
 </head>
 <body class="bg-zinc-950 text-zinc-100 min-h-screen">
   <div class="flex h-screen">
-    <!-- Sidebar -->
+    <!-- Sidebar – now with more stats -->
     <div class="w-96 bg-zinc-900 border-r border-zinc-800 p-6 flex flex-col overflow-auto">
-      <h1 class="text-2xl font-bold mb-6 text-emerald-400">DIFFERS BOT • EFFICIENT</h1>
+      <h1 class="text-2xl font-bold mb-6 text-emerald-400">DIFFERS BOT • EFFICIENT +</h1>
       
       <div class="space-y-5">
         <div>
-          <label class="block text-sm text-zinc-400 mb-1">API Token <span class="text-amber-400 text-xs">(demo first!)</span></label>
+          <label class="block text-sm text-zinc-400 mb-1">API Token <span class="text-amber-400 text-xs">(demo!)</span></label>
           <input id="token" type="password" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3">
+        </div>
+
+        <!-- Telegram -->
+        <div class="border-t border-zinc-700 pt-4">
+          <label class="block text-sm text-zinc-300 mb-2 font-medium">Telegram Alerts (optional)</label>
+          <input id="tgToken" placeholder="Bot Token" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 mb-2 text-sm">
+          <input id="tgChatId" placeholder="Chat ID" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 text-sm">
         </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm text-zinc-400 mb-1">Symbol</label>
+            <label class="block text-sm text-zinc-400 mb-1">Symbol (initial)</label>
             <input id="symbol" value="R_100" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3">
           </div>
           <div>
@@ -33,7 +40,7 @@
 
         <div class="grid grid-cols-3 gap-3 text-xs">
           <div>
-            <label>Confidence %</label>
+            <label>Conf %</label>
             <input id="confidence" value="15" type="number" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2">
           </div>
           <div>
@@ -48,11 +55,11 @@
 
         <div class="grid grid-cols-2 gap-3 text-xs">
           <div>
-            <label>Session TP (USD)</label>
+            <label>Session TP</label>
             <input id="sessionTP" value="50" type="number" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2">
           </div>
           <div>
-            <label>Session SL (USD)</label>
+            <label>Session SL</label>
             <input id="sessionSL" value="-25" type="number" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2">
           </div>
         </div>
@@ -62,66 +69,118 @@
           <button onclick="toggleTrading()" id="startBtn" disabled class="flex-1 bg-zinc-700 hover:bg-zinc-600 py-3 rounded-xl font-medium">Start</button>
         </div>
 
-        <button onclick="resetBot()" class="w-full bg-red-600/80 hover:bg-red-600 py-2 rounded-xl text-sm">Reset Bot</button>
+        <button onclick="resetBot()" class="w-full bg-red-600/80 hover:bg-red-600 py-2 rounded-xl text-sm">Reset All</button>
       </div>
 
-      <div class="mt-auto pt-8 text-xs space-y-2 text-zinc-400">
+      <!-- Real-time Stats Dashboard -->
+      <div class="mt-8 pt-6 border-t border-zinc-700">
+        <h3 class="text-lg font-semibold mb-4 text-emerald-300">Real-time Stats</h3>
+        <div class="space-y-3 text-sm">
+          <div>Trades: <span id="tradeCount" class="font-medium">0</span></div>
+          <div>Wins: <span id="wins" class="text-emerald-400">0</span> • Losses: <span id="losses" class="text-red-400">0</span></div>
+          <div>Win Rate: <span id="winRate" class="font-medium">0%</span></div>
+          <div>Avg Win: <span id="avgWin" class="text-emerald-400">0.00</span> • Avg Loss: <span id="avgLoss" class="text-red-400">0.00</span></div>
+          <div>Current Streak: <span id="streak" class="font-medium">0</span></div>
+          <div>Active Symbol: <span id="activeSymbol" class="font-mono">—</span></div>
+          <div>Switch Counter: <span id="switchCount">0</span>/10</div>
+        </div>
+      </div>
+
+      <div class="mt-auto pt-8 text-xs space-y-1 text-zinc-500">
         <div>Status: <span id="status" class="text-amber-400">Disconnected</span></div>
         <div>Balance: <span id="balance" class="text-emerald-400">—</span></div>
         <div>Current Stake: <span id="curStake" class="font-medium">—</span></div>
-        <div>Total P&amp;L: <span id="totalPnl" class="font-medium">0.00</span></div>
-        <div>Win Rate: <span id="winRate" class="font-medium">0%</span></div>
+        <div>Total P&L: <span id="totalPnl" class="font-medium">0.00</span></div>
       </div>
     </div>
 
-    <!-- Dashboard -->
-    <div class="flex-1 p-8 overflow-auto">
-      <div class="mb-8">
+    <!-- Main area – Live Log now at top -->
+    <div class="flex-1 flex flex-col">
+      <!-- Live Log (moved to top) -->
+      <div class="p-8 pb-4 flex-1 flex flex-col">
+        <h2 class="text-xl font-semibold mb-4">Live Log</h2>
+        <div id="log" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 flex-1 overflow-auto font-mono text-sm"></div>
+      </div>
+
+      <!-- Digit Frequency -->
+      <div class="px-8 pb-4">
         <h2 class="text-lg font-semibold mb-4">Last 1000 Ticks • Coldest Digit <span id="coldDigit" class="ml-4 text-5xl font-mono text-emerald-400">—</span></h2>
         <div id="digitBars" class="grid grid-cols-10 gap-2"></div>
       </div>
 
-      <div class="mb-8 bg-zinc-900 rounded-3xl p-6">
-        <h2 class="text-lg font-semibold mb-4">P&amp;L Curve</h2>
-        <canvas id="pnlChart" height="110"></canvas>
-      </div>
-
-      <div>
-        <h2 class="text-lg font-semibold mb-4">Live Log</h2>
-        <div id="log" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 h-[420px] overflow-auto font-mono text-sm"></div>
+      <!-- P&L Chart -->
+      <div class="px-8 pb-8">
+        <div class="bg-zinc-900 rounded-3xl p-6">
+          <h2 class="text-lg font-semibold mb-4">P&L Curve</h2>
+          <canvas id="pnlChart" height="110"></canvas>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
     // ================== CONFIG & STATE ==================
-    let ws = null, isTrading = false, token = "", symbol = "R_100";
-    let balance = 0, totalPnL = 0, wins = 0, losses = 0;
+    let ws = null, isTrading = false, token = "";
+    let tgToken = "", tgChatId = "";
+    let symbol = "R_100", activeSymbol = "R_100";
+    let balance = 0, totalPnL = 0, wins = 0, losses = 0, totalWinsProfit = 0, totalLosses = 0;
+    let currentStreak = 0, maxStreak = 0, tradeCount = 0, switchCount = 0;
     let lastDigits = [], digitFreq = new Array(10).fill(0);
-    let currentStake = 1, multiplier = 1;
+    let currentStake = 1, baseStake = 1, multiplier = 1;
     let consecutiveLosses = 0, openContractId = null, currentBarrier = 0;
     let pnlHistory = [], chart;
     let pingInterval = null;
 
     const MIN_STAKE = 0.35;
-    let confidenceThreshold = 15;   // % below average
+    let confidenceThreshold = 15;
     let maxRiskPercent = 2;
     let lossMultiplier = 1.4;
     let sessionTP = 50, sessionSL = -25;
+
+    const volatilityCycle = ["R_10", "R_25", "R_50", "R_75", "R_100"];
+    let cycleIndex = 4; // start with R_100
 
     // ================== HELPERS ==================
     function log(msg, color = "text-zinc-400") {
       const t = new Date().toLocaleTimeString();
       document.getElementById('log').innerHTML += `<div class="${color}"><span class="text-zinc-500">[${t}]</span> ${msg}</div>`;
-      document.getElementById('log').scrollTop = 99999;
+      document.getElementById('log').scrollTop = 999999;
+    }
+
+    async function sendTelegram(msg) {
+      if (!tgToken || !tgChatId) return;
+      try {
+        await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: tgChatId, text: msg, parse_mode: 'HTML' })
+        });
+      } catch (e) {}
     }
 
     function round2(n) { return Math.round(n * 100) / 100; }
 
+    function updateStats() {
+      const winRate = (tradeCount ? (wins / tradeCount * 100).toFixed(1) : 0) + "%";
+      const avgWin = wins ? round2(totalWinsProfit / wins) : 0;
+      const avgLoss = losses ? round2(totalLosses / losses) : 0;
+
+      document.getElementById('tradeCount').textContent = tradeCount;
+      document.getElementById('wins').textContent = wins;
+      document.getElementById('losses').textContent = losses;
+      document.getElementById('winRate').textContent = winRate;
+      document.getElementById('avgWin').textContent = avgWin.toFixed(2);
+      document.getElementById('avgLoss').textContent = avgLoss.toFixed(2);
+      document.getElementById('streak').textContent = currentStreak;
+      document.getElementById('activeSymbol').textContent = activeSymbol;
+      document.getElementById('switchCount').textContent = switchCount;
+    }
+
     function updateUI() {
       document.getElementById('curStake').textContent = currentStake.toFixed(2);
       document.getElementById('totalPnl').textContent = totalPnL.toFixed(2);
-      document.getElementById('winRate').textContent = (wins + losses ? (wins / (wins + losses) * 100).toFixed(1) : 0) + "%";
+      document.getElementById('balance').textContent = balance.toFixed(2);
+      updateStats();
     }
 
     function updateDigitBars() {
@@ -147,7 +206,7 @@
       }
     }
 
-    // ================== CORE TRADING LOGIC ==================
+    // ================== CORE LOGIC ==================
     function shouldTrade() {
       const avg = lastDigits.length / 10;
       const minF = Math.min(...digitFreq);
@@ -157,12 +216,25 @@
 
     function calculateStake() {
       let stake = round2(balance * maxRiskPercent / 100 * multiplier);
-      return Math.max(MIN_STAKE, Math.min(stake, balance * 0.05)); // never >5% even if multiplier high
+      return Math.max(MIN_STAKE, Math.min(stake, balance * 0.05));
+    }
+
+    function switchSymbol() {
+      cycleIndex = (cycleIndex + 1) % volatilityCycle.length;
+      activeSymbol = volatilityCycle[cycleIndex];
+      switchCount = 0;
+      log(`🔄 Auto-switched to ${activeSymbol} after 10 trades`, "text-purple-400");
+      sendTelegram(`🔄 Symbol switch → ${activeSymbol}`);
+      // Re-subscribe to new ticks
+      if (ws && isTrading) {
+        ws.send(JSON.stringify({ forget_all: "ticks" }));
+        ws.send(JSON.stringify({ ticks: activeSymbol }));
+      }
     }
 
     function placeTrade() {
       if (!shouldTrade()) {
-        log("⏸️ Skipped — confidence too low", "text-amber-400");
+        log("⏸️ Skipped — low confidence", "text-amber-400");
         return;
       }
 
@@ -181,31 +253,39 @@
         currency: "USD",
         duration: 1,
         duration_unit: "t",
-        symbol: symbol,
+        symbol: activeSymbol,
         barrier: currentBarrier.toString()
       };
 
-      log(`📊 Strong setup → barrier ${currentBarrier} @ $${currentStake.toFixed(2)} (${(Math.min(...digitFreq)/(lastDigits.length/10)*100).toFixed(1)}%)`, "text-emerald-400");
+      log(`📊 Setup → barrier ${currentBarrier} @ $${currentStake.toFixed(2)} on ${activeSymbol}`, "text-emerald-400");
       ws.send(JSON.stringify(req));
     }
 
-    // ================== WEBSOCKET HANDLERS ==================
+    // ================== WEBSOCKET ==================
     function connect() {
       token = document.getElementById('token').value.trim();
-      symbol = document.getElementById('symbol').value.trim() || "R_100";
+      tgToken = document.getElementById('tgToken').value.trim();
+      tgChatId = document.getElementById('tgChatId').value.trim();
+      activeSymbol = document.getElementById('symbol').value.trim() || "R_100";
+      baseStake = round2(parseFloat(document.getElementById('baseStake').value) || 1.00);
       confidenceThreshold = parseFloat(document.getElementById('confidence').value) || 15;
       maxRiskPercent = parseFloat(document.getElementById('maxRisk').value) || 2;
       lossMultiplier = parseFloat(document.getElementById('lossMult').value) || 1.4;
       sessionTP = parseFloat(document.getElementById('sessionTP').value) || 50;
       sessionSL = parseFloat(document.getElementById('sessionSL').value) || -25;
 
+      currentStake = baseStake;
+
+      if (!token) return alert("Enter API Token");
+
       if (ws) ws.close();
       ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=1089`);
 
       ws.onopen = () => {
         log("✅ Connected", "text-emerald-400");
+        sendTelegram("🤖 Bot Connected to Deriv");
         ws.send(JSON.stringify({ authorize: token }));
-        pingInterval = setInterval(() => ws.send(JSON.stringify({ping:1})), 25000);
+        pingInterval = setInterval(() => ws.readyState === 1 && ws.send(JSON.stringify({ping:1})), 25000);
       };
 
       ws.onmessage = (e) => {
@@ -215,7 +295,8 @@
           balance = m.authorize.balance;
           document.getElementById('balance').textContent = balance.toFixed(2);
           document.getElementById('startBtn').disabled = false;
-          log(`✅ Authorized | Balance $${balance.toFixed(2)}`, "text-emerald-400");
+          log(`✅ Authorized | $${balance.toFixed(2)}`, "text-emerald-400");
+          sendTelegram(`✅ Authorized | Balance: $${balance.toFixed(2)}`);
         }
 
         if (m.msg_type === "tick") {
@@ -237,42 +318,62 @@
         if (m.msg_type === "buy") {
           if (m.error) return log("Buy error: " + m.error.message, "text-red-400");
           openContractId = m.buy.contract_id;
-          log(`📍 Bought DIGITDIFF (barrier ${currentBarrier}) • $${currentStake.toFixed(2)}`, "text-blue-400");
+          log(`📍 Bought DIGITDIFF barrier ${currentBarrier} • $${currentStake.toFixed(2)}`, "text-blue-400");
           ws.send(JSON.stringify({ proposal_open_contract: 1, contract_id: openContractId, subscribe: 1 }));
         }
 
         if (m.msg_type === "proposal_open_contract" && m.proposal_open_contract.is_sold) {
           const profit = parseFloat(m.proposal_open_contract.profit || 0);
           totalPnL += profit;
-          updateUI();
+          tradeCount++;
+          switchCount++;
 
           if (profit > 0) {
             wins++;
-            consecutiveLosses = 0;
-            multiplier = 1;                    // ← RESET ON WIN (key for efficiency)
-            log(`🎉 WIN +$${profit.toFixed(2)} | Actual return ${(profit/currentStake*100).toFixed(1)}%`, "text-emerald-400");
+            totalWinsProfit += profit;
+            currentStreak = currentStreak > 0 ? currentStreak + 1 : 1;
+            maxStreak = Math.max(maxStreak, currentStreak);
+            multiplier = 1;
+            log(`🎉 WIN +$${profit.toFixed(2)}`, "text-emerald-400");
+            sendTelegram(`🎉 WIN +$${profit.toFixed(2)} | ${activeSymbol}`);
           } else {
             losses++;
+            totalLosses += Math.abs(profit);
+            currentStreak = currentStreak < 0 ? currentStreak - 1 : -1;
+            maxStreak = Math.max(maxStreak, Math.abs(currentStreak));
             consecutiveLosses++;
-            multiplier = Math.min(4, multiplier * lossMultiplier); // mild recovery
+            multiplier = Math.min(4, multiplier * lossMultiplier);
             log(`💥 LOSS -$${Math.abs(profit).toFixed(2)}`, "text-red-400");
+            sendTelegram(`💥 LOSS -$${Math.abs(profit).toFixed(2)} | ${activeSymbol}`);
             if (consecutiveLosses >= 3) {
               stopTrading();
-              log("🚨 3 LOSSES IN A ROW — BOT STOPPED", "text-red-500 font-bold");
+              log("🚨 3 LOSSES IN ROW → STOPPED", "text-red-500 font-bold");
+              sendTelegram("🚨 3 consecutive losses → Bot stopped");
             }
           }
 
           pnlHistory.push(totalPnL);
-          if (chart) chart.update();
+          if (pnlHistory.length > 100) pnlHistory.shift();
+          chart?.update();
 
           openContractId = null;
+          updateUI();
 
-          // Session targets
+          // Auto-switch after 10 trades
+          if (switchCount >= 10) switchSymbol();
+
           if (totalPnL >= sessionTP || totalPnL <= sessionSL) {
             stopTrading();
-            log(totalPnL >= sessionTP ? "🎯 SESSION TAKE PROFIT" : "🛑 SESSION STOP LOSS", "text-yellow-400 font-bold");
+            const reason = totalPnL >= sessionTP ? "TAKE PROFIT" : "STOP LOSS";
+            log(`🛑 SESSION ${reason} REACHED`, "text-yellow-400 font-bold");
+            sendTelegram(`🛑 Session ${reason} reached: ${totalPnL.toFixed(2)} USD`);
           }
         }
+      };
+
+      ws.onclose = () => {
+        log("⚠️ Disconnected", "text-red-400");
+        clearInterval(pingInterval);
       };
     }
 
@@ -283,10 +384,12 @@
       btn.classList.toggle('bg-red-600', isTrading);
 
       if (isTrading) {
-        log("🚀 Efficient Differs Bot STARTED", "text-emerald-400");
-        ws.send(JSON.stringify({ ticks: symbol }));
+        log(`🚀 Started on ${activeSymbol}`, "text-emerald-400");
+        sendTelegram(`🚀 Trading started on ${activeSymbol}`);
+        ws.send(JSON.stringify({ ticks: activeSymbol }));
       } else {
         log("⏹️ Stopped", "text-amber-400");
+        sendTelegram("⏹️ Trading stopped");
         if (ws) ws.send(JSON.stringify({ forget_all: "ticks" }));
       }
     }
@@ -299,23 +402,26 @@
     }
 
     function resetBot() {
-      if (!confirm("Reset everything?")) return;
+      if (!confirm("Reset all stats & counters?")) return;
       stopTrading();
-      totalPnL = wins = losses = consecutiveLosses = 0;
+      totalPnL = wins = losses = tradeCount = switchCount = consecutiveLosses = 0;
+      totalWinsProfit = totalLosses = currentStreak = maxStreak = 0;
       multiplier = 1;
       lastDigits = []; digitFreq.fill(0); pnlHistory = [];
+      cycleIndex = 4; activeSymbol = "R_100"; switchCount = 0;
       updateUI(); updateDigitBars();
-      log("🔄 Full reset", "text-zinc-400");
+      log("🔄 Full reset completed", "text-zinc-400");
+      sendTelegram("🔄 Bot fully reset");
     }
 
     window.onload = () => {
       const ctx = document.getElementById('pnlChart').getContext('2d');
       chart = new Chart(ctx, {
         type: 'line',
-        data: { labels: Array(50).fill(''), datasets: [{ data: [], borderColor: '#10b981', tension: 0.4 }] },
-        options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#27272a' }}}}
+        data: { labels: Array(100).fill(''), datasets: [{ data: [], borderColor: '#10b981', tension: 0.4, fill: false }] },
+        options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#27272a' } } } }
       });
-      log("👋 Efficient Differs Bot ready — use demo + confidence 15% for best results", "text-zinc-400");
+      log("👋 Upgraded bot ready — add Telegram details if you want alerts", "text-zinc-400");
     };
   </script>
 </body>
